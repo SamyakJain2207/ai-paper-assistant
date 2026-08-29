@@ -1,11 +1,8 @@
 [project]
 name = "ai-paper-assistant"
 version = "0.1.0"
-description = "Add your description here"
+description = "AI-powered research paper assistant"
 readme = "README.md"
-authors = [
-    { name = "Samyak Jain", email = "2205samyakjain@gmai.com" }
-]
 requires-python = ">=3.12"
 dependencies = [
     "fastapi>=0.141.1",
@@ -16,10 +13,3 @@ dependencies = [
     "ruff>=0.16.4",
     "uvicorn>=0.52.4",
 ]
-
-[project.scripts]
-ai-paper-assistant = "ai_paper_assistant:main"
-
-[build-system]
-requires = ["uv_build>=0.12.6,<0.13.0"]
-build-backend = "uv_build"
