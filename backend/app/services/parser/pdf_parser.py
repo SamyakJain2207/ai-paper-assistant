@@ -151,6 +151,26 @@ def extract_authors_fallback(raw_blocks: list[dict], title: str) -> list[str]:
     return []
 
 
+def clean_title(title: str) -> str:
+    """Helper to clean and normalize titles for similarity matching."""
+    title = title.lower()
+    title = re.sub(r"[^a-z0-9\s]", "", title)
+    return " ".join(title.split())
+
+
+def calculate_jaccard_similarity(t1: str, t2: str) -> float:
+    """Calculate the Jaccard word-overlap similarity between two titles."""
+    c1 = clean_title(t1)
+    c2 = clean_title(t2)
+    if not c1 or not c2:
+        return 0.0
+    w1 = set(c1.split())
+    w2 = set(c2.split())
+    intersection = w1.intersection(w2)
+    union = w1.union(w2)
+    return len(intersection) / len(union)
+
+
 def parse_date_string(date_str: str) -> datetime.date | None:
     """Robust parser to convert various publication date strings into datetime.date."""
     if not date_str:
@@ -246,18 +266,12 @@ def extract_local_arxiv_info(
     return arxiv_id, pub_date
 
 
-def enrich_via_arxiv_api(arxiv_id: str | None, title: str | None) -> dict | None:
-    """Query the official arXiv API using HTTPS by ID or Title to get metadata."""
-    if not arxiv_id and not title:
+def enrich_via_arxiv_api(arxiv_id: str) -> dict | None:
+    """Query the official arXiv API using HTTPS by ID to get metadata."""
+    if not arxiv_id:
         return None
 
-    # Construct the API URL
-    if arxiv_id:
-        url = f"https://export.arxiv.org/api/query?id_list={arxiv_id}"
-    else:
-        # Format title query
-        formatted_title = f'ti:"{title}"'
-        url = f"https://export.arxiv.org/api/query?search_query={formatted_title}&max_results=1"
+    url = f"https://export.arxiv.org/api/query?id_list={arxiv_id}"
 
     try:
         response = httpx.get(url, timeout=5.0)
@@ -267,12 +281,12 @@ def enrich_via_arxiv_api(arxiv_id: str | None, title: str | None) -> dict | None
                 "atom": "http://www.w3.org/2005/Atom",
                 "arxiv": "http://arxiv.org/schemas/atom",
             }
+
             entry = root.find("atom:entry", ns)
             if entry is not None:
                 title_res = entry.find("atom:title", ns).text.strip().replace("\n", " ")
                 title_res = re.sub(r"\s+", " ", title_res)
                 published = entry.find("atom:published", ns).text.strip()
-
                 doi_el = entry.find("arxiv:doi", ns)
                 doi = doi_el.text.strip() if doi_el is not None else None
 
@@ -292,7 +306,88 @@ def enrich_via_arxiv_api(arxiv_id: str | None, title: str | None) -> dict | None
                     "arxiv_id": extracted_id,
                 }
     except httpx.RequestError:
-        # Gracefully handle connection timeouts/exceptions
+        return None
+
+
+def query_crossref_by_doi(doi: str) -> dict | None:
+    """Fetch exact metadata from Crossref using a DOI."""
+    url = f"https://api.crossref.org/works/{doi}"
+    headers = {"User-Agent": "AIPaperAssistant/1.0 (mailto:assistant@example.com)"}
+    try:
+        response = httpx.get(url, headers=headers, timeout=5.0)
+        if response.status_code == 200:
+            item = response.json().get("message", {})
+            title = item.get("title", [None])[0]
+
+            pub_date = None
+            date_parts = item.get("published", {}).get("date-parts", [[None]])[0]
+            if date_parts and date_parts[0]:
+                year = date_parts[0]
+                month = date_parts[1] if len(date_parts) > 1 and date_parts[1] else 1
+                day = date_parts[2] if len(date_parts) > 2 and date_parts[2] else 1
+                pub_date = datetime.date(year, month, day)
+
+            authors = [
+                f"{a.get('given', '')} {a.get('family', '')}".strip()
+                for a in item.get("author", [])
+            ]
+
+            return {
+                "title": title,
+                "published": pub_date,
+                "doi": doi,
+                "authors": authors,
+            }
+    except httpx.RequestError:
+        return None
+
+
+def query_crossref_by_title(title: str) -> dict | None:
+    """Query Crossref API by title and return the best match if Jaccard similarity is high."""
+    url = "https://api.crossref.org/works"
+    params = {"query.title": title, "rows": 3}
+    headers = {"User-Agent": "AIPaperAssistant/1.0 (mailto:assistant@example.com)"}
+    try:
+        response = httpx.get(url, params=params, headers=headers, timeout=5.0)
+        if response.status_code == 200:
+            items = response.json().get("message", {}).get("items", [])
+            for item in items:
+                title_ref = item.get("title", [None])[0]
+                if not title_ref:
+                    continue
+
+                # Check Jaccard similarity
+                if calculate_jaccard_similarity(title, title_ref) >= 0.70:
+                    pub_date = None
+                    date_parts = item.get("published", {}).get("date-parts", [[None]])[
+                        0
+                    ]
+                    if date_parts and date_parts[0]:
+                        year = date_parts[0]
+                        month = (
+                            date_parts[1]
+                            if len(date_parts) > 1 and date_parts[1]
+                            else 1
+                        )
+                        day = (
+                            date_parts[2]
+                            if len(date_parts) > 2 and date_parts[2]
+                            else 1
+                        )
+                        pub_date = datetime.date(year, month, day)
+
+                    authors = [
+                        f"{a.get('given', '')} {a.get('family', '')}".strip()
+                        for a in item.get("author", [])
+                    ]
+
+                    return {
+                        "title": title_ref,
+                        "published": pub_date,
+                        "doi": item.get("DOI"),
+                        "authors": authors,
+                    }
+    except httpx.RequestError:
         return None
 
 
@@ -314,15 +409,39 @@ def parse_pdf(pdf_path: str | Path) -> Document:
                 raw_blocks, metadata.title or ""
             )
 
-        # 3. Local arXiv ID and Date extraction
-        arxiv_id, local_date = extract_local_arxiv_info(pdf)
-        metadata.publication_date = local_date
+        # 3. Local DOI, arXiv ID, and Date extraction
+        local_doi = None
+        doi_pattern = re.compile(r"\b(10\.\d{4,9}/[-._;()/:a-zA-Z0-9]+)\b")
+        for page_idx in range(min(2, len(pdf))):
+            page_text = pdf[page_idx].get_text()
+            doi_match = doi_pattern.search(page_text)
+            if doi_match:
+                local_doi = doi_match.group(1)
+                break
 
-        if arxiv_id:
+        arxiv_id, local_date = extract_local_arxiv_info(pdf)
+
+        metadata.publication_date = local_date
+        if local_doi:
+            metadata.doi = local_doi
+        elif arxiv_id:
             metadata.doi = f"10.48550/arXiv.{arxiv_id}"
 
-        # 4. Attempt remote metadata enrichment via arXiv API
-        enriched = enrich_via_arxiv_api(arxiv_id, metadata.title)
+        # 4. Attempt remote metadata enrichment
+        enriched = None
+
+        # Method A: Query by exact DOI (if found locally) on Crossref
+        if local_doi:
+            enriched = query_crossref_by_doi(local_doi)
+
+        # Method B: Query by arXiv ID on arXiv API (preprints only)
+        if not enriched and arxiv_id:
+            enriched = enrich_via_arxiv_api(arxiv_id)
+
+        # Method C: Query by Title on Crossref API (Universal search for all publications)
+        if not enriched and metadata.title:
+            enriched = query_crossref_by_title(metadata.title)
+
         if enriched:
             if enriched.get("title"):
                 metadata.title = enriched["title"]

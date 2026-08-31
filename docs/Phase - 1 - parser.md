@@ -70,4 +70,26 @@ Although these were temporary diagnostic scripts and were subsequently removed t
 - **Font Size Constraints**: Heading text blocks styled in bold must have a font size of at least `9.5` to separate them from small bold table cells or chart labels.
 - **Watermark/Preprint Exclusions**: Non-bold metadata or preprint blocks that have large extracted font sizes (due to PDF layering tricks) must be explicitly filtered out using keywords (e.g. `arXiv:`, `doi:`).
 - **Footnote / Superscript Ratios**: Blocks starting with a number should only be considered section headings if the numbering span's font size is relatively equal to the rest of the block (ratio $\ge 0.90$). Superscript footnotes usually have a ratio of $\le 0.70$.
-- **Bibliography Year Filters**: Section numbering should exclude values $\ge 50$ to avoid false positive matches on bibliography years (e.g. `2016.` or `2003.`).
+- **Bibliography Year Filters**: Section numbering should exclude values $\ge 50$ to avoid false positive matches on bibliography years (e.g. `2016.` or `2003.`).
+
+## Generalized Metadata Extraction & Title Similarity
+
+To support research papers downloaded from any source (not just arXiv), the metadata extraction pipeline uses a multi-layered local-first and remote-enrichment approach:
+
+- **Local DOI Extraction**: Scans the first two pages of the PDF text for standard publisher DOIs matching the regex pattern `10.\d{4,9}/[-._;()/:a-zA-Z0-9]+` (standard for IEEE, ACM, Springer, NeurIPS, ACL, and other journals).
+- **Jaccard Title Similarity Filtering**: Calculates Jaccard similarity (Intersection over Union of words) between our local fallback title and the API search results to prevent false matches (e.g. accepting correct matches while rejecting partial title clashes). Jaccard threshold is set to $\ge 0.70$.
+- **Local Fallbacks**: Extracts Page 1 titles, parses bold name spans for authors, and looks for preprint watermarks/conference years.
+- **Enrichment Layers**: 
+  1. Exact DOI query on Crossref API
+  2. ArXiv ID query on arXiv API
+  3. Title search on arXiv API with Jaccard filter
+  4. Title search on Crossref API with Jaccard filter
+
+## Additional Diagnostic Scripts (Turn 2)
+
+The following temporary scripts were used to develop these features:
+
+- **`inspect_missed_headings.py` / `inspect_all_bold.py`**: Investigated why unnumbered headings inside paragraphs (like "Model Architecture") were merged into text blocks, leading to the creation of the inline run-in heading splitter.
+- **`search_doi_dates.py` / `search_doi_text.py`**: Scanned text for DOI and date identifiers, confirming that arXiv preprints do not print DOIs in their body text.
+- **`test_arxiv_api.py` / `test_arxiv_api_https.py`**: Tested official arXiv metadata lookup, demonstrating the need for HTTPS.
+- **`test_similarity.py` / `test_jaccard.py`**: Evaluated overlap coefficient vs. Jaccard similarity, confirming Jaccard is far more precise for title lookups.
