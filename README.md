@@ -39,12 +39,16 @@ ai-paper-assistant/
 │   │   ├── models/            # Pydantic data models (Document, Section, ContentBlock, Metadata)
 │   │   └── services/
 │   │       ├── parser/        # Phase 1: PDF parser and section detector
-│   │       └── nlp/           # Phase 2: Preprocessing, TF-IDF, Keywords, Summarizer
-│   └── tests/                 # Unit tests and system evaluation scripts
+│   │       ├── nlp/           # Phase 2: Preprocessing, TF-IDF, Keywords, Summarizer
+│   │       └── embeddings/    # Phase 3: Word2Vec & Sentence Transformers
+│   └── tests/
+│       ├── unit_tests/        # Automated pytest suites (parsers, NLP, embeddings)
+│       └── paper_evaluations/ # End-to-end evaluation scripts on real research papers
 ├── data/
 │   ├── papers/                # Raw research paper PDFs (Attention, BERT)
-│   └── processed/             # Processed artifacts
+│   └── processed/             # Processed artifacts & trained models
 ├── docs/                      # Technical design & phase retrospective notes
+├── notebooks/                 # Exploratory research notebooks & interactive demonstrations
 └── pyproject.toml             # Project dependencies and pytest configuration
 ```
 

@@ -17,5 +17,10 @@ dependencies = [
 ]
 
 [tool.pytest.ini_options]
-testpaths = ["backend/tests"]
+testpaths = ["backend/tests/unit_tests"]
 norecursedirs = [".venv", ".git", ".pytest_cache", ".ruff_cache"]
+
+[dependency-groups]
+dev = [
+    "ipykernel>=7.3.0",
+]

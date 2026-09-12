@@ -174,11 +174,11 @@ class Word2VecPipeline:
     def sentence_vector(
         self,
         sentence: str | list[str],
-        weights: dict[str, float] | None = None,
+        weights: dict[str, float] | object | None = None,
     ) -> np.ndarray:
         """
         Demonstrate naive bag-of-words sentence vector pooling.
-        Averages word vectors with optional TF-IDF weights.
+        Averages word vectors with optional TF-IDF weights or a TFIDFModel instance.
         Returns a zero vector if no words from the sentence are in vocabulary.
         """
         if self.model is None:
@@ -189,15 +189,27 @@ class Word2VecPipeline:
         else:
             tokens = [t.lower() for t in sentence]
 
+        if weights is not None:
+            if hasattr(weights, "transform"):
+                # Accepts a Phase 2 TFIDFModel instance directly
+                token_weight_map: dict[str, float] = weights.transform(tokens)
+            elif isinstance(weights, dict):
+                token_weight_map = weights
+            else:
+                token_weight_map = None
+        else:
+            token_weight_map = None
+
         vectors: list[np.ndarray] = []
         token_weights: list[float] = []
 
         for t in tokens:
             if t in self.model.wv:
                 v = self.model.wv[t]
-                w = weights.get(t, 1.0) if weights is not None else 1.0
-                vectors.append(v * w)
-                token_weights.append(w)
+                w = token_weight_map.get(t, 0.0) if token_weight_map is not None else 1.0
+                if w > 0.0:
+                    vectors.append(v * w)
+                    token_weights.append(w)
 
         if not vectors or sum(token_weights) == 0:
             return np.zeros(self.vector_size, dtype=np.float32)
@@ -209,10 +221,11 @@ class Word2VecPipeline:
         self,
         sent1: str | list[str],
         sent2: str | list[str],
-        weights: dict[str, float] | None = None,
+        weights: dict[str, float] | object | None = None,
     ) -> float:
         """
         Compute cosine similarity between two sentences using naive vector pooling.
+        Accepts optional weights (dict or Phase 2 TFIDFModel).
         """
         v1 = self.sentence_vector(sent1, weights=weights)
         v2 = self.sentence_vector(sent2, weights=weights)

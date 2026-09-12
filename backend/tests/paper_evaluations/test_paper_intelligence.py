@@ -2,7 +2,7 @@ import sys
 from pathlib import Path
 
 # Ensure backend root is on sys.path
-backend_dir = Path(__file__).resolve().parent.parent
+backend_dir = Path(__file__).resolve().parents[2]
 if str(backend_dir) not in sys.path:
     sys.path.insert(0, str(backend_dir))
 
@@ -15,7 +15,11 @@ def run_paper_test(paper_name: str = "Attention-is-all-you-need.pdf"):
     papers_dir = (
         Path("data/papers")
         if Path("data/papers").exists()
-        else Path("../data/papers")
+        else (
+            Path("../data/papers")
+            if Path("../data/papers").exists()
+            else Path("../../data/papers")
+        )
     )
     pdf_path = papers_dir / paper_name
 

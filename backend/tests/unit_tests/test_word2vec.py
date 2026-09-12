@@ -128,3 +128,19 @@ def test_model_save_and_load(trained_cbow_pipeline, tmp_path):
     vec_original = trained_cbow_pipeline.get_vector("attention")
     vec_loaded = loaded.get_vector("attention")
     np.testing.assert_allclose(vec_original, vec_loaded, rtol=1e-5)
+
+
+def test_tfidf_weighted_sentence_vector(trained_cbow_pipeline):
+    from app.services.nlp.tfidf import TFIDFModel
+
+    tfidf = TFIDFModel().fit(SAMPLE_CORPUS)
+    sent = "the transformer model uses self attention"
+
+    # Compute unweighted vs tfidf-weighted
+    unweighted_vec = trained_cbow_pipeline.sentence_vector(sent, weights=None)
+    weighted_vec = trained_cbow_pipeline.sentence_vector(sent, weights=tfidf)
+
+    assert unweighted_vec.shape == (32,)
+    assert weighted_vec.shape == (32,)
+    # Weighted vector should differ from uniform vector because 'the' has low IDF and 'transformer' has high IDF
+    assert not np.allclose(unweighted_vec, weighted_vec)

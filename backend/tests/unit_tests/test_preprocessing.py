@@ -33,6 +33,7 @@ def test_preprocess_text():
         "powerful",
     ]
 
+
 def test_remove_stopwords():
     tokens = ["the", "transformer", "is", "a", "neural", "network"]
 

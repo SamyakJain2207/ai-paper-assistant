@@ -3,7 +3,7 @@ from pathlib import Path
 import numpy as np
 
 # Ensure backend root is on sys.path
-backend_dir = Path(__file__).resolve().parent.parent
+backend_dir = Path(__file__).resolve().parents[2]
 if str(backend_dir) not in sys.path:
     sys.path.insert(0, str(backend_dir))
 
@@ -36,7 +36,11 @@ def run_word2vec_evaluation():
     papers_dir = (
         Path("data/papers")
         if Path("data/papers").exists()
-        else Path("../data/papers")
+        else (
+            Path("../data/papers")
+            if Path("../data/papers").exists()
+            else Path("../../data/papers")
+        )
     )
     pdf_files = sorted(list(papers_dir.glob("*.pdf")))
     if not pdf_files:
@@ -85,7 +89,15 @@ def run_word2vec_evaluation():
     print(f"    ✓ Skip-gram Vocabulary Size: {skipgram_pipeline.vocab_size} unique words")
 
     # Save models to data/processed
-    processed_dir = Path("data/processed") if Path("data/processed").exists() else Path("../data/processed")
+    processed_dir = (
+        Path("data/processed")
+        if Path("data/processed").exists()
+        else (
+            Path("../data/processed")
+            if Path("../data/processed").exists()
+            else Path("../../data/processed")
+        )
+    )
     processed_dir.mkdir(parents=True, exist_ok=True)
     cbow_pipeline.save(processed_dir / "word2vec_cbow.model")
     skipgram_pipeline.save(processed_dir / "word2vec_skipgram.model")
