@@ -12,6 +12,7 @@ dependencies = [
     "pymupdf>=1.28.2",
     "pytest>=9.1.1",
     "ruff>=0.16.4",
+    "sentence-transformers>=6.0.1",
     "spacy>=3.8.16",
     "uvicorn>=0.52.4",
 ]
