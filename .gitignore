@@ -3,3 +3,5 @@ __pycache__/
 *.pyc
 .env
 *.pdf
+.temp/
+data/chroma_db/
