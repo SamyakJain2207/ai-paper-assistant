@@ -41,6 +41,7 @@ Module 6: Specialized Multi-Agent Layer [PLANNED]
 - **Phase 3.3 — Dense Semantic Embeddings (Sentence Transformers)**: See [`docs/Phase - 3.3 - sentence_transformers.md`](docs/Phase%20-%203.3%20-%20sentence_transformers.md) for the Siamese bi-encoder architecture (`all-MiniLM-L6-v2`), `EmbeddedBlock` schema, and head-to-head empirical benchmark across full research papers.
 - **Phase 3.5 — Embedded Vector Database (ChromaDB)**: See [`docs/Phase - 3.5 - vector_database.md`](docs/Phase%20-%203.5%20-%20vector_database.md) for persistent storage at `data/chroma_db/`, HNSW indexing with cosine distance metric, idempotent upsert pipeline, metadata-scoped queries, and paper lifecycle management.
 - **Phase 4.1 — Production Semantic Chunking**: See [`docs/Phase - 4.1 - production_chunking.md`](docs/Phase%20-%204.1%20-%20production_chunking.md) for section-aware sliding-window chunking (300 max tokens, 50 overlap), sentence-boundary preservation, and contextual header injection (`embed_text` vs `content_text`).
+- **Phase 4.2 — Hybrid Search Engine (BM25 + ChromaDB)**: See [`docs/Phase - 4.2 - hybrid_search.md`](docs/Phase%20-%204.2%20-%20hybrid_search.md) for dual dense-sparse retrieval fused via 1-based Reciprocal Rank Fusion (RRF), technical tokenization (`d_model`, `28.4`), and non-negative Robertson IDF.
 
 ---
 

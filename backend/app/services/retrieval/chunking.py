@@ -5,7 +5,16 @@ from pydantic import BaseModel, Field
 from app.models.chunk import Chunk
 from app.models.document import ContentBlock, Document
 from app.services.nlp.preprocessing import clean_paper_text
-from app.services.nlp.sentence_scoring import split_sentences
+from app.services.nlp.text_cleaning import process_text
+
+
+def segment_sentences(text: str) -> list[str]:
+    """
+    Extract complete sentences from text using spaCy.
+    Unlike summarization filtering, chunking preserves all sentences to prevent data loss.
+    """
+    doc = process_text(text)
+    return [" ".join(s.text.split()).strip() for s in doc.sents if s.text.strip()]
 
 
 class ChunkingConfig(BaseModel):
@@ -54,12 +63,17 @@ class SemanticChunker:
         and generates dual representations (clean content_text vs contextual embed_text).
         """
         paper_id = (
-            document.metadata.arxiv_id
+            getattr(document.metadata, "arxiv_id", None)
             or document.metadata.doi
-            or document.metadata.title.lower().replace(" ", "_")[:50]
+            or ((document.metadata.title or "paper").lower().replace(" ", "_")[:50])
         )
         paper_id = re.sub(r"[^a-zA-Z0-9_-]", "_", paper_id)
         paper_title = document.metadata.title or "Untitled Research Paper"
+
+        # Build section title lookup: section_id -> section_title
+        section_titles: dict[str, str] = {
+            sec.section_id: sec.title for sec in document.sections
+        }
 
         # 1. Group content blocks by section title to avoid cross-section bleed
         section_groups: list[dict[str, Any]] = []
@@ -70,8 +84,12 @@ class SemanticChunker:
             if not cleaned or len(cleaned.split()) < 3:
                 continue
 
-            sec_title = block.section_title or "Main Content"
             sec_id = block.section_id
+            sec_title = (
+                section_titles.get(sec_id)
+                if sec_id
+                else getattr(block, "section_title", None)
+            ) or "Main Content"
 
             if current_group is None or current_group["section_title"] != sec_title:
                 if current_group is not None:
@@ -134,7 +152,7 @@ class SemanticChunker:
 
         for block in blocks:
             cleaned_block = clean_paper_text(block.text)
-            sentences = split_sentences(cleaned_block)
+            sentences = segment_sentences(cleaned_block)
             for s in sentences:
                 s_clean = s.strip()
                 if not s_clean:

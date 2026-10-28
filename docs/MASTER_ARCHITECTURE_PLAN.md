@@ -98,7 +98,7 @@ The **AI Paper Assistant** is an intelligent academic research assistant designe
      $$\text{RRF\_Score}(d) = \sum_{m \in \{\text{dense}, \text{sparse}\}} \frac{1}{k + r_m(d)}$$
   4. **Cross-Encoder Re-ranking**: Two-stage retrieval using `ms-marco-MiniLM-L-6-v2` to eliminate semantic false positives.
   5. **Best Context Assembly**: Token budgeting, provenance tracking, and chronological ordering ready for LLM consumption.
-* **Status**: **Next up for implementation**.
+* **Status**: **Phase 4.1 (Chunking) & Phase 4.2 (Hybrid Search) Completed; Phase 4.3 (Cross-Encoder Re-ranking) Next**.
 
 ---
 

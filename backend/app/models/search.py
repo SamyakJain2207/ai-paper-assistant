@@ -61,3 +61,30 @@ class SearchFilter(BaseModel):
         if len(conditions) == 1:
             return conditions[0]
         return {"$and": conditions}
+
+
+class HybridSearchResult(BaseModel):
+    """
+    Represents a unified retrieval hit resulting from Reciprocal Rank Fusion (RRF)
+    of dense vector search (ChromaDB) and sparse lexical search (BM25).
+    """
+
+    chunk_id: str = Field(description="Unique deterministic chunk ID")
+    content_text: str = Field(description="Clean passage text for LLM consumption")
+    embed_text: str = Field(description="Enriched text with prepended document and section headers")
+    rrf_score: float = Field(description="Reciprocal Rank Fusion score: sum(w / (k + rank))")
+    dense_rank: int | None = Field(default=None, description="1-based rank in dense search list")
+    sparse_rank: int | None = Field(default=None, description="1-based rank in BM25 search list")
+    dense_score: float | None = Field(default=None, description="Raw cosine similarity [-1.0, 1.0]")
+    sparse_score: float | None = Field(default=None, description="Raw BM25Okapi relevance score")
+    cross_score: float | None = Field(default=None, description="Raw cross‑encoder relevance score (logits)")
+    final_score: float | None = Field(default=None, description="Combined score used for final ranking (RRF + weighted cross‑encoder)")
+    # Keep existing fields after this insertion
+    paper_id: str = Field(description="Source paper identifier")
+    paper_title: str = Field(description="Source paper title")
+    section_title: str | None = Field(default=None, description="Section heading")
+    page_numbers: list[int] = Field(default_factory=list, description="Pages spanned by chunk")
+    parent_section_text: str | None = Field(default=None, description="Full parent section text")
+    is_reference: bool = Field(default=False, description="Whether chunk is a bibliography entry")
+    metadata: dict[str, Any] = Field(default_factory=dict, description="Metadata payload")
+

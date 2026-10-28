@@ -422,6 +422,7 @@ def parse_pdf(pdf_path: str | Path) -> Document:
         arxiv_id, local_date = extract_local_arxiv_info(pdf)
 
         metadata.publication_date = local_date
+        metadata.arxiv_id = arxiv_id
         if local_doi:
             metadata.doi = local_doi
         elif arxiv_id:

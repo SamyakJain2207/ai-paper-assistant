@@ -121,9 +121,9 @@ class ChromaService:
         all blocks into ChromaDB.
         """
         paper_id = (
-            document.metadata.arxiv_id
+            getattr(document.metadata, "arxiv_id", None)
             or document.metadata.doi
-            or document.metadata.title.lower().replace(" ", "_")[:50]
+            or ((document.metadata.title or "paper").lower().replace(" ", "_")[:50])
         )
         blocks = embedder.embed_document_blocks(document, min_words=min_words)
         self.index_embedded_blocks(
