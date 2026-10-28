@@ -6,3 +6,4 @@ __pycache__/
 .temp/
 data/chroma_db/
 /plan.md
+.ipynb_checkpoints/

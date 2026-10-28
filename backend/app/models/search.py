@@ -77,9 +77,14 @@ class HybridSearchResult(BaseModel):
     sparse_rank: int | None = Field(default=None, description="1-based rank in BM25 search list")
     dense_score: float | None = Field(default=None, description="Raw cosine similarity [-1.0, 1.0]")
     sparse_score: float | None = Field(default=None, description="Raw BM25Okapi relevance score")
-    cross_score: float | None = Field(default=None, description="Raw cross‑encoder relevance score (logits)")
-    final_score: float | None = Field(default=None, description="Combined score used for final ranking (RRF + weighted cross‑encoder)")
-    # Keep existing fields after this insertion
+    cross_score: float | None = Field(
+        default=None,
+        description="Cross-encoder relevance score; set only when the hit was reranked",
+    )
+    final_score: float | None = Field(
+        default=None,
+        description="Score that determines final order: cross_score if reranked, else rrf_score",
+    )
     paper_id: str = Field(description="Source paper identifier")
     paper_title: str = Field(description="Source paper title")
     section_title: str | None = Field(default=None, description="Section heading")
@@ -87,4 +92,3 @@ class HybridSearchResult(BaseModel):
     parent_section_text: str | None = Field(default=None, description="Full parent section text")
     is_reference: bool = Field(default=False, description="Whether chunk is a bibliography entry")
     metadata: dict[str, Any] = Field(default_factory=dict, description="Metadata payload")
-
