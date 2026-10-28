@@ -69,9 +69,32 @@ def test_score_sentences():
         "A weather report discusses heavy rain.",
     ]
     scored = score_sentences(sents, model)
+
+    # Sentences with no overlap with the paper's keywords score 0 and are dropped
+    # on purpose, so only domain-relevant candidates reach the summarizer.
+    assert len(scored) == 1
+    assert scored[0].text == sents[0]
+    assert scored[0].score > 0
+    # order_index keeps the sentence's original position in the input list
+    assert scored[0].order_index == 0
+
+
+def test_score_sentences_ranks_domain_sentence_above_weaker_match():
+    corpus = [
+        ["transformer", "self", "attention"],
+        ["recurrent", "network", "sequence"],
+    ]
+    model = TFIDFModel(smooth=True).fit(corpus)
+    sents = [
+        "A weather report discusses heavy rain and some attention.",  # weak, diluted match
+        "The Transformer uses self-attention mechanism.",             # strong match
+    ]
+    scored = score_sentences(sents, model)
+
     assert len(scored) == 2
-    # The first sentence with domain words should score significantly higher than unrelated weather words
-    assert scored[0].score > scored[1].score
+    by_text = {s.text: s for s in scored}
+    assert by_text[sents[1]].score > by_text[sents[0]].score
+    assert by_text[sents[1]].order_index == 1
 
 
 def test_extract_section_keywords():

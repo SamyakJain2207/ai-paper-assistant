@@ -161,3 +161,46 @@ def test_hybrid_search_atomic_deletion(temp_hybrid_engine):
     hits = temp_hybrid_engine.search("Paper 1 content", top_k=5)
     for h in hits:
         assert h.paper_id != "paper_del"
+
+
+def test_bm25_reindexing_same_chunk_is_idempotent():
+    c1 = make_test_chunk("c1", "Adam optimizer with warmup steps.")
+    c2 = make_test_chunk("c2", "Dropout and label smoothing regularization.")
+
+    bm25 = BM25Index().fit([c1, c2])
+    idf_before = bm25.compute_idf("adam")
+    freqs_before = dict(bm25.doc_freqs)
+
+    bm25.add_chunks([c1])  # re-index an identical chunk
+
+    assert bm25.total_docs == 2
+    assert dict(bm25.doc_freqs) == freqs_before
+    assert bm25.compute_idf("adam") == idf_before
+
+
+def test_bm25_reindexing_replaces_old_content():
+    old = make_test_chunk("c1", "Original text about convolution.")
+    bm25 = BM25Index().fit([old])
+    assert bm25.search("convolution", top_k=3) != []
+
+    new = make_test_chunk("c1", "Updated text about recurrence.")
+    bm25.add_chunks([new])
+
+    assert bm25.search("convolution", top_k=3) == []
+    assert "convolution" not in bm25.doc_freqs
+    assert bm25.search("recurrence", top_k=3)[0][0].chunk_id == "c1"
+
+
+def test_bm25_delete_keeps_doc_frequencies_consistent():
+    a = make_test_chunk("a", "shared term alpha", paper_id="A")
+    b = make_test_chunk("b", "shared term beta", paper_id="B")
+    bm25 = BM25Index().fit([a, b])
+
+    assert bm25.delete_paper("A") == 1
+
+    expected = {}
+    for tokens in bm25.doc_tokens.values():
+        for t in set(tokens):
+            expected[t] = expected.get(t, 0) + 1
+    assert dict(bm25.doc_freqs) == expected
+    assert "alpha" not in bm25.doc_freqs

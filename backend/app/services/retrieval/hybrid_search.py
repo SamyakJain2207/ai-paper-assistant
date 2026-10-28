@@ -3,10 +3,12 @@ from app.models.embedding import EmbeddedBlock
 from app.models.search import HybridSearchResult, SearchFilter, SearchResult
 from app.services.embeddings.sentence_transformer import SentenceEmbeddingService
 from app.services.retrieval.bm25 import BM25Index
+from app.services.retrieval.reranker import CrossEncoderReranker
 from app.services.vector_db.chroma_service import ChromaService
 
 DEFAULT_RRF_K = 60
 DEFAULT_CANDIDATE_POOL = 25
+DEFAULT_RERANK_POOL = 20
 
 
 class HybridSearchEngine:
@@ -22,6 +24,9 @@ class HybridSearchEngine:
       hits never enter RRF.
     - Scale-invariant fusion: never mixes unbounded BM25 scores with cosine similarities.
     - Deterministic ordering: ties in RRF score are broken by best rank, then chunk_id.
+    - Optional second stage: a CrossEncoderReranker re-orders the top fused
+      candidates by (query, passage) relevance. RRF decides who enters the pool;
+      the cross-encoder score alone decides the final order.
 
     Design note: BM25Index is the single source of truth for full Chunk objects
     (exposed here as ``chunks_by_id``). ChromaDB persists across sessions while the
@@ -34,10 +39,12 @@ class HybridSearchEngine:
         chroma_service: ChromaService,
         embedder: SentenceEmbeddingService,
         bm25_index: BM25Index | None = None,
+        reranker: CrossEncoderReranker | None = None,
     ) -> None:
         self.chroma_service = chroma_service
         self.embedder = embedder
         self.bm25_index = bm25_index or BM25Index()
+        self.reranker = reranker
 
     @property
     def chunks_by_id(self) -> dict[str, Chunk]:
@@ -124,9 +131,12 @@ class HybridSearchEngine:
         rrf_k: int = DEFAULT_RRF_K,
         search_filter: SearchFilter | None = None,
         filter_paper_id: str | None = None,
+        rerank: bool = True,
+        rerank_pool: int = DEFAULT_RERANK_POOL,
     ) -> list[HybridSearchResult]:
         """
-        Execute Hybrid Search combining ChromaDB dense ANN search and BM25 lexical search.
+        Execute Hybrid Search combining ChromaDB dense ANN search and BM25 lexical search,
+        optionally followed by cross-encoder reranking.
 
         Uses 1-based Reciprocal Rank Fusion (RRF):
             Score(d) = (w_dense / (k + rank_dense)) + (w_sparse / (k + rank_sparse))
@@ -142,6 +152,10 @@ class HybridSearchEngine:
                 to BOTH retrievers.
             filter_paper_id: Shortcut to scope both retrievers to one paper.
                 Takes precedence over ``search_filter.paper_id``.
+            rerank: Apply the cross-encoder when one was configured. Ignored
+                (plain RRF ordering) if the engine has no reranker.
+            rerank_pool: Number of top fused candidates sent to the cross-encoder
+                (raised to top_k if smaller).
         """
         if rrf_k < 0:
             raise ValueError("rrf_k must be non-negative")
@@ -207,9 +221,12 @@ class HybridSearchEngine:
             )
         )
 
-        # --- Stage 4: Build output models for the top-k ---
+        # --- Stage 4: Build output models for the fused top candidates ---
+        use_reranker = rerank and self.reranker is not None
+        fetch_k = max(top_k, rerank_pool) if use_reranker else top_k
+
         results: list[HybridSearchResult] = []
-        for cid, rrf_score in fused[:top_k]:
+        for cid, rrf_score in fused[:fetch_k]:
             dense_entry = dense_ranked.get(cid)
             sparse_entry = sparse_ranked.get(cid)
             results.append(
@@ -220,7 +237,11 @@ class HybridSearchEngine:
                     sparse_entry=sparse_entry,
                 )
             )
-        return results
+
+        # --- Stage 5: Cross-encoder reranking (optional) ---
+        if use_reranker:
+            return self.reranker.rerank(query_text, results, top_k=top_k)
+        return results[:top_k]
 
     # ------------------------------------------------------------------
     # Helpers
@@ -266,6 +287,7 @@ class HybridSearchEngine:
                 content_text=chunk.content_text,
                 embed_text=chunk.embed_text,
                 rrf_score=round(rrf_score, 6),
+                final_score=round(rrf_score, 6),
                 dense_rank=dense_rank,
                 sparse_rank=sparse_rank,
                 dense_score=dense_score,
@@ -288,6 +310,7 @@ class HybridSearchEngine:
             content_text=hit.text,
             embed_text=str(hit.metadata.get("embed_text", hit.text)),
             rrf_score=round(rrf_score, 6),
+            final_score=round(rrf_score, 6),
             dense_rank=dense_rank,
             sparse_rank=sparse_rank,
             dense_score=dense_score,

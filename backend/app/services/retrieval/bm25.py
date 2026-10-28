@@ -88,27 +88,36 @@ class BM25Index:
             cid for cid, c in self.chunks_by_id.items() if c.paper_id == paper_id
         ]
         for cid in to_delete:
-            del self.chunks_by_id[cid]
-            del self.doc_tokens[cid]
-            del self.doc_lens[cid]
-
-        # Recompute doc frequencies from scratch
-        self.doc_freqs.clear()
-        for tokens in self.doc_tokens.values():
-            for t in set(tokens):
-                self.doc_freqs[t] += 1
+            self._remove_single_chunk(cid)
 
         self._recompute_corpus_stats()
         return len(to_delete)
 
     def _add_single_chunk(self, chunk: Chunk) -> None:
-        """Index enriched embed_text of a single chunk."""
+        """
+        Index enriched embed_text of a single chunk.
+        Idempotent: re-adding an existing chunk_id replaces it, so document
+        frequencies (and therefore IDF) are never double-counted.
+        """
+        if chunk.chunk_id in self.chunks_by_id:
+            self._remove_single_chunk(chunk.chunk_id)
+
         self.chunks_by_id[chunk.chunk_id] = chunk
         tokens = tokenize_bm25(chunk.embed_text)
         self.doc_tokens[chunk.chunk_id] = tokens
         self.doc_lens[chunk.chunk_id] = len(tokens)
         for t in set(tokens):
             self.doc_freqs[t] += 1
+
+    def _remove_single_chunk(self, chunk_id: str) -> None:
+        """Remove one chunk and decrement the document frequency of its terms."""
+        for t in set(self.doc_tokens.get(chunk_id, [])):
+            self.doc_freqs[t] -= 1
+            if self.doc_freqs[t] <= 0:
+                del self.doc_freqs[t]
+        self.chunks_by_id.pop(chunk_id, None)
+        self.doc_tokens.pop(chunk_id, None)
+        self.doc_lens.pop(chunk_id, None)
 
     def _recompute_corpus_stats(self) -> None:
         self.total_docs = len(self.chunks_by_id)
